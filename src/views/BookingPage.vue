@@ -25,6 +25,48 @@ const form = ref({
   comment: '',
 })
 
+function formatPhone(e: Event) {
+  const input = e.target as HTMLInputElement
+  const isDelete = (e as InputEvent).inputType?.startsWith('delete')
+
+  // Оставляем только цифры
+  let digits = input.value.replace(/\D/g, '')
+
+  // Приводим к российскому формату: заменяем 8 → 7 в начале
+  if (digits.startsWith('8')) digits = '7' + digits.slice(1)
+  if (!digits.startsWith('7') && digits.length > 0) digits = '7' + digits
+  digits = digits.slice(0, 11)
+
+  // Форматируем по маске +7 (XXX) XXX-XX-XX
+  let result = ''
+  if (digits.length > 0) result = '+7'
+  if (digits.length > 1) result += ' (' + digits.slice(1, 4)
+  if (digits.length >= 4) result += ') ' + digits.slice(4, 7)
+  if (digits.length >= 7) result += '-' + digits.slice(7, 9)
+  if (digits.length >= 9) result += '-' + digits.slice(9, 11)
+  // Незакрытая скобка если пользователь ещё набирает
+  if (digits.length > 1 && digits.length < 4 && !isDelete) result += ')'
+
+  form.value.phone = result
+  // Восстанавливаем позицию курсора
+  const pos = result.length
+  requestAnimationFrame(() => input.setSelectionRange(pos, pos))
+}
+
+function onPhoneFocus(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (!form.value.phone) {
+    form.value.phone = '+7 ('
+    requestAnimationFrame(() => input.setSelectionRange(4, 4))
+  }
+}
+
+function onPhoneBlur() {
+  // Очищаем если введено меньше 11 цифр (неполный номер)
+  const digits = form.value.phone.replace(/\D/g, '')
+  if (digits.length < 11) form.value.phone = ''
+}
+
 const today = computed(() => new Date().toISOString().slice(0, 10))
 const nights = computed(() => {
   if (!form.value.checkIn || !form.value.checkOut) return 0
@@ -115,7 +157,17 @@ async function submit() {
               </div>
               <div>
                 <label class="label">Телефон <span class="text-red-500">*</span></label>
-                <input v-model="form.phone" type="tel" class="input-field" placeholder="+7 (900) 000-00-00" required>
+                <input
+                  :value="form.phone"
+                  type="tel"
+                  class="input-field"
+                  placeholder="+7 (999) 999-99-99"
+                  autocomplete="tel"
+                  required
+                  @input="formatPhone"
+                  @focus="onPhoneFocus"
+                  @blur="onPhoneBlur"
+                >
               </div>
             </div>
 
