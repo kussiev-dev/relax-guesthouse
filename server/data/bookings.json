@@ -1,0 +1,50 @@
+[
+  {
+    "id": "mpsh8wtec1m8",
+    "guestName": "Иван Петров",
+    "phone": "+79001234567",
+    "email": "",
+    "roomId": 2,
+    "roomName": "Стандарт",
+    "checkIn": "2026-07-01",
+    "checkOut": "2026-07-10",
+    "adults": 2,
+    "children": 1,
+    "comment": "",
+    "status": "pending",
+    "createdAt": "2026-05-30T14:59:50.690Z",
+    "totalDays": 9
+  },
+  {
+    "id": "mpsha7haizpc",
+    "guestName": "Ольга Смирнова",
+    "phone": "+79151234567",
+    "email": "olga@mail.ru",
+    "roomId": 3,
+    "roomName": "Люкс 2-комнатный",
+    "checkIn": "2026-07-15",
+    "checkOut": "2026-07-25",
+    "adults": 2,
+    "children": 2,
+    "comment": "Нужна детская кроватка",
+    "status": "pending",
+    "createdAt": "2026-05-30T15:00:51.166Z",
+    "totalDays": 10
+  },
+  {
+    "id": "mpsha7hh4e3r",
+    "guestName": "Михаил Козлов",
+    "phone": "+79261234567",
+    "email": "",
+    "roomId": 1,
+    "roomName": "Эконом",
+    "checkIn": "2026-06-20",
+    "checkOut": "2026-06-28",
+    "adults": 1,
+    "children": 0,
+    "comment": "",
+    "status": "pending",
+    "createdAt": "2026-05-30T15:00:51.173Z",
+    "totalDays": 8
+  }
+]
