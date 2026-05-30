@@ -25,32 +25,38 @@ const form = ref({
   comment: '',
 })
 
+function applyPhoneMask(raw: string): string {
+  let digits = raw.replace(/\D/g, '')
+  if (digits.startsWith('8')) digits = '7' + digits.slice(1)
+  if (digits.length > 0 && !digits.startsWith('7')) digits = '7' + digits
+  digits = digits.slice(0, 11) // жёсткий лимит — 11 цифр
+
+  let out = ''
+  if (digits.length >= 1)  out = '+7'
+  if (digits.length >= 2)  out += ' (' + digits.slice(1, 4)
+  if (digits.length >= 5)  out += ') ' + digits.slice(4, 7)
+  else if (digits.length >= 2) out += ')'
+  if (digits.length >= 8)  out += '-' + digits.slice(7, 9)
+  if (digits.length >= 10) out += '-' + digits.slice(9, 11)
+  return out
+}
+
 function formatPhone(e: Event) {
   const input = e.target as HTMLInputElement
-  const isDelete = (e as InputEvent).inputType?.startsWith('delete')
+  const formatted = applyPhoneMask(input.value)
+  form.value.phone = formatted
+  requestAnimationFrame(() => input.setSelectionRange(formatted.length, formatted.length))
+}
 
-  // Оставляем только цифры
-  let digits = input.value.replace(/\D/g, '')
-
-  // Приводим к российскому формату: заменяем 8 → 7 в начале
-  if (digits.startsWith('8')) digits = '7' + digits.slice(1)
-  if (!digits.startsWith('7') && digits.length > 0) digits = '7' + digits
-  digits = digits.slice(0, 11)
-
-  // Форматируем по маске +7 (XXX) XXX-XX-XX
-  let result = ''
-  if (digits.length > 0) result = '+7'
-  if (digits.length > 1) result += ' (' + digits.slice(1, 4)
-  if (digits.length >= 4) result += ') ' + digits.slice(4, 7)
-  if (digits.length >= 7) result += '-' + digits.slice(7, 9)
-  if (digits.length >= 9) result += '-' + digits.slice(9, 11)
-  // Незакрытая скобка если пользователь ещё набирает
-  if (digits.length > 1 && digits.length < 4 && !isDelete) result += ')'
-
-  form.value.phone = result
-  // Восстанавливаем позицию курсора
-  const pos = result.length
-  requestAnimationFrame(() => input.setSelectionRange(pos, pos))
+function onPhoneKeydown(e: KeyboardEvent) {
+  const input = e.target as HTMLInputElement
+  const digits = input.value.replace(/\D/g, '')
+  // Блокируем любой ввод цифры если уже 11 цифр
+  const isDigit = /^\d$/.test(e.key)
+  const isAllowed = ['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Home','End'].includes(e.key)
+    || e.ctrlKey || e.metaKey
+  if (isDigit && digits.length >= 11) e.preventDefault()
+  if (!isDigit && !isAllowed) e.preventDefault()
 }
 
 function onPhoneFocus(e: Event) {
@@ -62,7 +68,6 @@ function onPhoneFocus(e: Event) {
 }
 
 function onPhoneBlur() {
-  // Очищаем если введено меньше 11 цифр (неполный номер)
   const digits = form.value.phone.replace(/\D/g, '')
   if (digits.length < 11) form.value.phone = ''
 }
@@ -165,6 +170,7 @@ async function submit() {
                   autocomplete="tel"
                   required
                   @input="formatPhone"
+                  @keydown="onPhoneKeydown"
                   @focus="onPhoneFocus"
                   @blur="onPhoneBlur"
                 >
