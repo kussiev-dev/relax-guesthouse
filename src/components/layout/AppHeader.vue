@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 const route = useRoute()
 const isScrolled = ref(false)
 const mobileOpen = ref(false)
+
+// Прозрачный режим только на главной странице
+const isHome = computed(() => route.path === '/')
+const transparent = computed(() => isHome.value && !isScrolled.value)
 
 function onScroll() { isScrolled.value = window.scrollY > 50 }
 onMounted(() => window.addEventListener('scroll', onScroll))
@@ -21,7 +25,7 @@ const navLinks = [
 <template>
   <header
     class="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
-    :class="isScrolled ? 'bg-white/95 backdrop-blur-md shadow-md' : 'bg-transparent'"
+    :class="transparent ? 'bg-transparent' : 'bg-white/95 backdrop-blur-md shadow-md'"
   >
     <div class="page-container">
       <div class="flex items-center justify-between h-16 md:h-20">
@@ -33,8 +37,8 @@ const navLinks = [
             </svg>
           </div>
           <div>
-            <span class="font-bold text-lg leading-tight block" :class="isScrolled ? 'text-gray-900' : 'text-white'">Релакс</span>
-            <span class="text-xs leading-none" :class="isScrolled ? 'text-gray-400' : 'text-white/70'">Джемете, Анапа</span>
+            <span class="font-bold text-lg leading-tight block" :class="transparent ? 'text-white' : 'text-gray-900'">Релакс</span>
+            <span class="text-xs leading-none" :class="transparent ? 'text-white/70' : 'text-gray-400'">Джемете, Анапа</span>
           </div>
         </RouterLink>
 
@@ -48,9 +52,9 @@ const navLinks = [
             :class="[
               route.path === link.to
                 ? 'bg-[#C8973A] text-white shadow-md'
-                : isScrolled
-                  ? 'text-gray-700 hover:text-[#C8973A] hover:bg-amber-50'
-                  : 'text-white/90 hover:text-white hover:bg-white/20'
+                : transparent
+                  ? 'text-white/90 hover:text-white hover:bg-white/20'
+                  : 'text-gray-700 hover:text-[#C8973A] hover:bg-amber-50'
             ]"
           >{{ link.label }}</RouterLink>
         </nav>
@@ -69,7 +73,7 @@ const navLinks = [
         <!-- Mobile burger -->
         <button
           class="md:hidden p-2 rounded-lg transition-colors"
-          :class="isScrolled ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/20'"
+          :class="transparent ? 'text-white hover:bg-white/20' : 'text-gray-700 hover:bg-gray-100'"
           @click="mobileOpen = !mobileOpen"
         >
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
