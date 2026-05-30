@@ -5,7 +5,7 @@ import AppHeader from '@/components/layout/AppHeader.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
 import api from '@/api'
 
-interface Room { id: number; name: string; priceMin: number; priceMax: number; capacity: number }
+interface Room { id: number; name: string; priceMin: number; priceMax: number; capacity: number; available: boolean }
 
 const route = useRoute()
 const rooms = ref<Room[]>([])
@@ -189,15 +189,32 @@ async function submit() {
                 <label
                   v-for="room in rooms"
                   :key="room.id"
-                  class="relative cursor-pointer"
+                  :class="room.available ? 'relative cursor-pointer' : 'relative cursor-not-allowed opacity-60'"
                 >
-                  <input v-model="form.roomId" type="radio" :value="String(room.id)" class="sr-only peer">
-                  <div class="p-4 rounded-xl border-2 transition-all duration-200 peer-checked:border-[#C8973A] peer-checked:bg-amber-50 border-gray-200 hover:border-gray-300">
-                    <div class="font-semibold text-gray-900 text-sm">{{ room.name }}</div>
-                    <div class="text-xs text-[#C8973A] font-medium mt-0.5">от {{ room.priceMin.toLocaleString('ru') }}₽</div>
-                    <div class="text-xs text-gray-500 mt-0.5">до {{ room.capacity }} чел.</div>
+                  <input
+                    v-model="form.roomId"
+                    type="radio"
+                    :value="String(room.id)"
+                    :disabled="!room.available"
+                    class="sr-only peer"
+                  >
+                  <div
+                    class="p-4 rounded-xl border-2 transition-all duration-200 border-gray-200"
+                    :class="!room.available
+                      ? 'bg-gray-50'
+                      : 'peer-checked:border-[#C8973A] peer-checked:bg-amber-50 hover:border-gray-300'"
+                  >
+                    <div class="font-semibold text-sm" :class="room.available ? 'text-gray-900' : 'text-gray-400'">{{ room.name }}</div>
+                    <div class="text-xs font-medium mt-0.5" :class="room.available ? 'text-[#C8973A]' : 'text-gray-400'">
+                      от {{ room.priceMin.toLocaleString('ru') }}₽
+                    </div>
+                    <div class="text-xs mt-0.5" :class="room.available ? 'text-gray-500' : 'text-gray-400'">до {{ room.capacity }} чел.</div>
+                    <div v-if="!room.available" class="flex items-center gap-1 mt-1.5">
+                      <svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                      <span class="text-xs text-gray-400">Недоступен</span>
+                    </div>
                   </div>
-                  <div v-if="form.roomId === String(room.id)" class="absolute top-2 right-2 w-5 h-5 bg-[#C8973A] rounded-full flex items-center justify-center">
+                  <div v-if="form.roomId === String(room.id) && room.available" class="absolute top-2 right-2 w-5 h-5 bg-[#C8973A] rounded-full flex items-center justify-center">
                     <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
                   </div>
                 </label>

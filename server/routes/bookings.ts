@@ -17,6 +17,10 @@ router.post('/', async (req: Request, res: Response) => {
   if (new Date(checkIn) >= new Date(checkOut)) {
     return res.status(400).json({ error: 'Дата выезда должна быть позже даты заезда' })
   }
+  const { rows: roomRows } = await pool.query('SELECT available FROM rooms WHERE id = $1', [parseInt(roomId)])
+  if (!roomRows[0] || !roomRows[0].available) {
+    return res.status(400).json({ error: 'Этот номер временно недоступен для бронирования' })
+  }
   const totalDays = Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000)
   const id = generateId()
   await pool.query(

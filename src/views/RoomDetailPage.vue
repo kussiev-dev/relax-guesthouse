@@ -159,12 +159,18 @@ const roomColors: Record<string, string> = {
                   </div>
                 </div>
 
-                <RouterLink :to="`/booking?room=${room.id}`" class="btn-primary w-full justify-center text-base py-3.5">
+                <RouterLink v-if="room.available" :to="`/booking?room=${room.id}`" class="btn-primary w-full justify-center text-base py-3.5">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                   </svg>
                   Забронировать этот номер
                 </RouterLink>
+                <div v-else class="bg-gray-100 rounded-xl p-4 text-center">
+                  <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                  <p class="text-sm font-semibold text-gray-600">Номер временно недоступен</p>
+                  <p class="text-xs text-gray-400 mt-1">Позвоните нам, мы поможем подобрать альтернативу</p>
+                  <a href="tel:+79186723781" class="btn-secondary w-full justify-center mt-3 py-2.5 text-sm">Позвонить</a>
+                </div>
 
                 <div class="mt-4 text-center">
                   <a href="tel:+79186723781" class="text-sm text-[#C8973A] hover:underline flex items-center justify-center gap-1.5">
