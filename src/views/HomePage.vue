@@ -180,7 +180,7 @@ const reviews = [
                 <span class="badge bg-white/90 text-gray-700 font-semibold shadow-sm">{{ room.name }}</span>
               </div>
               <div class="absolute top-3 right-3">
-                <span class="badge bg-[#C8973A] text-white">{{ room.priceLabel }}</span>
+                <span class="badge bg-[#C8973A] text-white">от {{ room.priceMin.toLocaleString('ru') }} ₽</span>
               </div>
               <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300"></div>
             </div>
@@ -202,7 +202,7 @@ const reviews = [
                 <span v-if="room.amenities.length > 3" class="text-xs text-gray-400">+{{ room.amenities.length - 3 }}</span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="font-bold text-[#C8973A] text-lg">{{ room.priceLabel }}</span>
+                <span class="font-bold text-[#C8973A] text-lg">от {{ room.priceMin.toLocaleString('ru') }} ₽/ночь</span>
                 <span class="text-[#C8973A] text-sm font-medium group-hover:translate-x-1 transition-transform inline-block">Подробнее →</span>
               </div>
             </div>

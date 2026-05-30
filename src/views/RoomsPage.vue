@@ -110,7 +110,7 @@ const roomIcons: Record<string, string> = {
                     <p class="text-sm text-gray-500 mt-0.5">{{ room.type === 'econom' ? 'Эконом-класс' : room.type === 'standard' ? 'Стандарт' : 'Люкс' }}</p>
                   </div>
                   <div class="text-right">
-                    <span class="text-2xl font-bold text-[#C8973A]">{{ room.priceLabel }}</span>
+                    <span class="text-2xl font-bold text-[#C8973A]">от {{ room.priceMin.toLocaleString('ru') }} ₽/ночь</span>
                   </div>
                 </div>
 

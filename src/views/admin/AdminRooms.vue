@@ -69,9 +69,14 @@ async function saveRoom() {
   if (!editingRoom.value) return
   saving.value = editingRoom.value.id
   try {
-    await api.put(`/rooms/${editingRoom.value.id}`, editForm.value)
+    // Автоматически обновляем priceLabel из priceMin
+    const payload = {
+      ...editForm.value,
+      priceLabel: `от ${(editForm.value.priceMin ?? 0).toLocaleString('ru')} ₽/ночь`,
+    }
+    await api.put(`/rooms/${editingRoom.value.id}`, payload)
     const idx = rooms.value.findIndex(r => r.id === editingRoom.value!.id)
-    if (idx !== -1) rooms.value[idx] = { ...rooms.value[idx], ...editForm.value } as Room
+    if (idx !== -1) rooms.value[idx] = { ...rooms.value[idx], ...payload } as Room
     cancelEdit()
   } finally {
     saving.value = null
@@ -206,7 +211,12 @@ const roomIcons: Record<string, string> = { econom: '🛏️', standard: '🏠',
             </div>
 
             <div>
-              <label class="label">Описание</label>
+              <label class="label">Краткое описание <span class="text-gray-400 font-normal">(карточка на главной)</span></label>
+              <input v-model="editForm.shortDescription" type="text" class="input-field" placeholder="Бюджетный номер с кондиционером...">
+            </div>
+
+            <div>
+              <label class="label">Полное описание</label>
               <textarea v-model="editForm.description" class="input-field resize-none" rows="3"></textarea>
             </div>
 
