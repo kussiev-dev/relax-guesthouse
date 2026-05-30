@@ -42,6 +42,7 @@ initDb()
     })
   })
   .catch(err => {
-    console.error('❌ DB init failed:', err.message)
+    console.error('❌ DB init failed:', err?.message || err)
+    console.error('DATABASE_URL set:', !!process.env.DATABASE_URL)
     process.exit(1)
   })

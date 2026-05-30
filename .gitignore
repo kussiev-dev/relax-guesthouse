@@ -23,6 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# Compiled server
+dist-server/
+
 # SQLite DB — не коммитим, создаётся автоматически на сервере
 server/data/relax.db
 server/data/relax.db-shm
