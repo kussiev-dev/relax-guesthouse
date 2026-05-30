@@ -1,47 +1,43 @@
 import { Router, Request, Response } from 'express'
-import db, { parseRoom } from '../db.js'
+import pool from '../db.js'
 import { authMiddleware } from '../middleware/auth.js'
 
 const router = Router()
 
-router.get('/', (_req: Request, res: Response) => {
-  const rows = db.prepare('SELECT * FROM rooms').all() as Record<string, unknown>[]
-  res.json(rows.map(parseRoom))
+router.get('/', async (_req: Request, res: Response) => {
+  const { rows } = await pool.query('SELECT * FROM rooms ORDER BY id')
+  res.json(rows)
 })
 
-router.get('/:id', (req: Request, res: Response) => {
-  const row = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
-  if (!row) return res.status(404).json({ error: 'Номер не найден' })
-  res.json(parseRoom(row))
+router.get('/:id', async (req: Request, res: Response) => {
+  const { rows } = await pool.query('SELECT * FROM rooms WHERE id = $1', [req.params.id])
+  if (!rows[0]) return res.status(404).json({ error: 'Номер не найден' })
+  res.json(rows[0])
 })
 
-router.put('/:id', authMiddleware, (req: Request, res: Response) => {
-  const existing = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.id)
-  if (!existing) return res.status(404).json({ error: 'Номер не найден' })
-
+router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   const body = req.body
-  const fields: string[] = []
+  const sets: string[] = []
   const values: unknown[] = []
+  let i = 1
 
-  const allowed = ['type','name','description','shortDescription','area','capacity','floor',
+  const scalar = ['type','name','description','shortDescription','area','capacity','floor',
     'priceMin','priceMax','priceLabel','available','totalRooms']
+  const json = ['amenities','furniture','images']
 
-  for (const key of allowed) {
-    if (key in body) {
-      fields.push(`${key} = ?`)
-      values.push(key === 'available' ? (body[key] ? 1 : 0) : body[key])
-    }
+  for (const key of scalar) {
+    if (key in body) { sets.push(`"${key}" = $${i++}`); values.push(body[key]) }
   }
-  if ('amenities' in body) { fields.push('amenities = ?'); values.push(JSON.stringify(body.amenities)) }
-  if ('furniture' in body) { fields.push('furniture = ?'); values.push(JSON.stringify(body.furniture)) }
-  if ('images' in body)    { fields.push('images = ?');    values.push(JSON.stringify(body.images)) }
+  for (const key of json) {
+    if (key in body) { sets.push(`"${key}" = $${i++}`); values.push(JSON.stringify(body[key])) }
+  }
 
-  if (fields.length === 0) return res.status(400).json({ error: 'Нет полей для обновления' })
-
+  if (sets.length === 0) return res.status(400).json({ error: 'Нет полей для обновления' })
   values.push(req.params.id)
-  db.prepare(`UPDATE rooms SET ${fields.join(', ')} WHERE id = ?`).run(...values)
-  const updated = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.id) as Record<string, unknown>
-  res.json(parseRoom(updated))
+
+  await pool.query(`UPDATE rooms SET ${sets.join(', ')} WHERE id = $${i}`, values)
+  const { rows } = await pool.query('SELECT * FROM rooms WHERE id = $1', [req.params.id])
+  res.json(rows[0])
 })
 
 export default router

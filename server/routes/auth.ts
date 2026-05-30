@@ -1,19 +1,17 @@
 import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import db from '../db.js'
+import pool from '../db.js'
 import { JWT_SECRET } from '../middleware/auth.js'
 
 const router = Router()
 
 router.post('/login', async (req: Request, res: Response) => {
   const { username, password } = req.body
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Введите логин и пароль' })
-  }
-  const admin = db.prepare('SELECT * FROM admin WHERE username = ?').get(username) as
-    { username: string; passwordHash: string; name: string } | undefined
+  if (!username || !password) return res.status(400).json({ error: 'Введите логин и пароль' })
 
+  const { rows } = await pool.query('SELECT * FROM admin WHERE username = $1', [username])
+  const admin = rows[0] as { username: string; passwordHash: string; name: string } | undefined
   if (!admin) return res.status(401).json({ error: 'Неверный логин или пароль' })
 
   const valid = await bcrypt.compare(password, admin.passwordHash)

@@ -1,137 +1,108 @@
-import Database from 'better-sqlite3'
-import { resolve } from 'path'
+import { Pool } from 'pg'
 import { readFileSync, existsSync } from 'fs'
+import { resolve } from 'path'
 import bcrypt from 'bcryptjs'
 
-const DB_PATH = process.env.DB_PATH || resolve('./server/data/relax.db')
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+})
 
-const db = new Database(DB_PATH)
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
+export async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS rooms (
+      id               SERIAL PRIMARY KEY,
+      type             TEXT NOT NULL,
+      name             TEXT NOT NULL,
+      description      TEXT NOT NULL DEFAULT '',
+      "shortDescription" TEXT NOT NULL DEFAULT '',
+      area             INTEGER NOT NULL DEFAULT 20,
+      capacity         INTEGER NOT NULL DEFAULT 2,
+      floor            INTEGER NOT NULL DEFAULT 1,
+      "priceMin"       INTEGER NOT NULL DEFAULT 0,
+      "priceMax"       INTEGER NOT NULL DEFAULT 0,
+      "priceLabel"     TEXT NOT NULL DEFAULT '',
+      amenities        JSONB NOT NULL DEFAULT '[]',
+      furniture        JSONB NOT NULL DEFAULT '[]',
+      images           JSONB NOT NULL DEFAULT '[]',
+      available        BOOLEAN NOT NULL DEFAULT TRUE,
+      "totalRooms"     INTEGER NOT NULL DEFAULT 1
+    );
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS rooms (
-    id          INTEGER PRIMARY KEY,
-    type        TEXT NOT NULL,
-    name        TEXT NOT NULL,
-    description TEXT NOT NULL,
-    shortDescription TEXT NOT NULL,
-    area        INTEGER NOT NULL,
-    capacity    INTEGER NOT NULL,
-    floor       INTEGER NOT NULL DEFAULT 1,
-    priceMin    INTEGER NOT NULL,
-    priceMax    INTEGER NOT NULL,
-    priceLabel  TEXT NOT NULL,
-    amenities   TEXT NOT NULL DEFAULT '[]',
-    furniture   TEXT NOT NULL DEFAULT '[]',
-    images      TEXT NOT NULL DEFAULT '[]',
-    available   INTEGER NOT NULL DEFAULT 1,
-    totalRooms  INTEGER NOT NULL DEFAULT 1
-  );
+    CREATE TABLE IF NOT EXISTS bookings (
+      id           TEXT PRIMARY KEY,
+      "guestName"  TEXT NOT NULL,
+      phone        TEXT NOT NULL,
+      email        TEXT NOT NULL DEFAULT '',
+      "roomId"     INTEGER NOT NULL,
+      "roomName"   TEXT NOT NULL,
+      "checkIn"    TEXT NOT NULL,
+      "checkOut"   TEXT NOT NULL,
+      adults       INTEGER NOT NULL DEFAULT 1,
+      children     INTEGER NOT NULL DEFAULT 0,
+      comment      TEXT NOT NULL DEFAULT '',
+      status       TEXT NOT NULL DEFAULT 'pending',
+      "totalDays"  INTEGER NOT NULL DEFAULT 1,
+      "createdAt"  TEXT NOT NULL,
+      "updatedAt"  TEXT
+    );
 
-  CREATE TABLE IF NOT EXISTS bookings (
-    id          TEXT PRIMARY KEY,
-    guestName   TEXT NOT NULL,
-    phone       TEXT NOT NULL,
-    email       TEXT NOT NULL DEFAULT '',
-    roomId      INTEGER NOT NULL,
-    roomName    TEXT NOT NULL,
-    checkIn     TEXT NOT NULL,
-    checkOut    TEXT NOT NULL,
-    adults      INTEGER NOT NULL DEFAULT 1,
-    children    INTEGER NOT NULL DEFAULT 0,
-    comment     TEXT NOT NULL DEFAULT '',
-    status      TEXT NOT NULL DEFAULT 'pending',
-    totalDays   INTEGER NOT NULL DEFAULT 1,
-    createdAt   TEXT NOT NULL,
-    updatedAt   TEXT
-  );
+    CREATE TABLE IF NOT EXISTS admin (
+      id             SERIAL PRIMARY KEY,
+      username       TEXT UNIQUE NOT NULL,
+      "passwordHash" TEXT NOT NULL,
+      name           TEXT NOT NULL
+    );
+  `)
 
-  CREATE TABLE IF NOT EXISTS admin (
-    id           INTEGER PRIMARY KEY,
-    username     TEXT UNIQUE NOT NULL,
-    passwordHash TEXT NOT NULL,
-    name         TEXT NOT NULL
-  );
-`)
-
-// Seed rooms from JSON if table is empty
-const roomCount = (db.prepare('SELECT COUNT(*) as c FROM rooms').get() as { c: number }).c
-if (roomCount === 0) {
-  const roomsPath = resolve('./server/data/rooms.json')
-  if (existsSync(roomsPath)) {
-    const rooms = JSON.parse(readFileSync(roomsPath, 'utf-8'))
-    const insert = db.prepare(`
-      INSERT INTO rooms (id, type, name, description, shortDescription, area, capacity, floor,
-        priceMin, priceMax, priceLabel, amenities, furniture, images, available, totalRooms)
-      VALUES (@id, @type, @name, @description, @shortDescription, @area, @capacity, @floor,
-        @priceMin, @priceMax, @priceLabel, @amenities, @furniture, @images, @available, @totalRooms)
-    `)
-    const insertMany = db.transaction((rows: typeof rooms) => {
-      for (const r of rows) {
-        insert.run({
-          ...r,
-          amenities: JSON.stringify(r.amenities),
-          furniture: JSON.stringify(r.furniture),
-          images: JSON.stringify(r.images),
-          available: r.available ? 1 : 0,
-        })
+  // Seed rooms if empty
+  const { rows: roomRows } = await pool.query('SELECT COUNT(*) as c FROM rooms')
+  if (parseInt(roomRows[0].c) === 0) {
+    const roomsPath = resolve('./server/data/rooms.json')
+    if (existsSync(roomsPath)) {
+      const rooms = JSON.parse(readFileSync(roomsPath, 'utf-8'))
+      for (const r of rooms) {
+        await pool.query(
+          `INSERT INTO rooms (id, type, name, description, "shortDescription", area, capacity, floor,
+            "priceMin", "priceMax", "priceLabel", amenities, furniture, images, available, "totalRooms")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+          [r.id, r.type, r.name, r.description, r.shortDescription, r.area, r.capacity, r.floor,
+           r.priceMin, r.priceMax, r.priceLabel, JSON.stringify(r.amenities),
+           JSON.stringify(r.furniture), JSON.stringify(r.images), r.available, r.totalRooms]
+        )
       }
-    })
-    insertMany(rooms)
-    console.log(`✓ Imported ${rooms.length} rooms from JSON`)
-  }
-}
-
-// Seed bookings from JSON if table is empty
-const bookingCount = (db.prepare('SELECT COUNT(*) as c FROM bookings').get() as { c: number }).c
-if (bookingCount === 0) {
-  const bookingsPath = resolve('./server/data/bookings.json')
-  if (existsSync(bookingsPath)) {
-    const bookings = JSON.parse(readFileSync(bookingsPath, 'utf-8'))
-    if (bookings.length > 0) {
-      const insert = db.prepare(`
-        INSERT INTO bookings (id, guestName, phone, email, roomId, roomName, checkIn, checkOut,
-          adults, children, comment, status, totalDays, createdAt, updatedAt)
-        VALUES (@id, @guestName, @phone, @email, @roomId, @roomName, @checkIn, @checkOut,
-          @adults, @children, @comment, @status, @totalDays, @createdAt, @updatedAt)
-      `)
-      const insertMany = db.transaction((rows: typeof bookings) => {
-        for (const b of rows) insert.run({ updatedAt: null, ...b })
-      })
-      insertMany(bookings)
-      console.log(`✓ Imported ${bookings.length} bookings from JSON`)
+      // Reset sequence after manual ID insert
+      await pool.query(`SELECT setval('rooms_id_seq', (SELECT MAX(id) FROM rooms))`)
+      console.log(`✓ Seeded ${rooms.length} rooms`)
     }
   }
-}
 
-// Seed admin if table is empty
-const adminCount = (db.prepare('SELECT COUNT(*) as c FROM admin').get() as { c: number }).c
-if (adminCount === 0) {
-  const adminPath = resolve('./server/data/admin.json')
-  if (existsSync(adminPath)) {
-    const admin = JSON.parse(readFileSync(adminPath, 'utf-8'))
-    db.prepare('INSERT INTO admin (username, passwordHash, name) VALUES (?, ?, ?)')
-      .run(admin.username, admin.passwordHash, admin.name)
-    console.log('✓ Imported admin from JSON')
-  } else {
-    const hash = bcrypt.hashSync('admin123', 10)
-    db.prepare('INSERT INTO admin (username, passwordHash, name) VALUES (?, ?, ?)')
-      .run('admin', hash, 'Манана')
-    console.log('✓ Created default admin (admin / admin123)')
+  // Seed admin if empty
+  const { rows: adminRows } = await pool.query('SELECT COUNT(*) as c FROM admin')
+  if (parseInt(adminRows[0].c) === 0) {
+    const adminPath = resolve('./server/data/admin.json')
+    let username = 'admin', passwordHash = '', name = 'Манана'
+    if (existsSync(adminPath)) {
+      const a = JSON.parse(readFileSync(adminPath, 'utf-8'))
+      username = a.username; passwordHash = a.passwordHash; name = a.name
+    } else {
+      passwordHash = await bcrypt.hash('admin123', 10)
+    }
+    await pool.query(
+      'INSERT INTO admin (username, "passwordHash", name) VALUES ($1,$2,$3)',
+      [username, passwordHash, name]
+    )
+    console.log('✓ Seeded admin')
   }
 }
 
-// Helpers for JSON array columns
 export function parseRoom(r: Record<string, unknown>) {
-  if (!r) return null
   return {
     ...r,
-    amenities: JSON.parse(r.amenities as string),
-    furniture: JSON.parse(r.furniture as string),
-    images: JSON.parse(r.images as string),
+    priceMin: r.priceMin ?? r['priceMin'],
+    priceMax: r.priceMax ?? r['priceMax'],
     available: Boolean(r.available),
   }
 }
 
-export default db
+export default pool

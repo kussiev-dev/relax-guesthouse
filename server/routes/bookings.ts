@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express'
-import db from '../db.js'
+import pool from '../db.js'
 import { authMiddleware } from '../middleware/auth.js'
 
 const router = Router()
@@ -8,8 +8,8 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 }
 
-// Public: create booking request
-router.post('/', (req: Request, res: Response) => {
+// Public: create booking
+router.post('/', async (req: Request, res: Response) => {
   const { guestName, phone, email, roomId, roomName, checkIn, checkOut, adults, children, comment } = req.body
   if (!guestName || !phone || !roomId || !checkIn || !checkOut) {
     return res.status(400).json({ error: 'Заполните обязательные поля' })
@@ -19,82 +19,85 @@ router.post('/', (req: Request, res: Response) => {
   }
   const totalDays = Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000)
   const id = generateId()
-  db.prepare(`
-    INSERT INTO bookings (id, guestName, phone, email, roomId, roomName, checkIn, checkOut,
-      adults, children, comment, status, totalDays, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-  `).run(id, guestName, phone, email || '', parseInt(roomId), roomName, checkIn, checkOut,
-         parseInt(adults) || 1, parseInt(children) || 0, comment || '', totalDays, new Date().toISOString())
-
+  await pool.query(
+    `INSERT INTO bookings (id, "guestName", phone, email, "roomId", "roomName", "checkIn", "checkOut",
+      adults, children, comment, status, "totalDays", "createdAt")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',$12,$13)`,
+    [id, guestName, phone, email || '', parseInt(roomId), roomName, checkIn, checkOut,
+     parseInt(adults) || 1, parseInt(children) || 0, comment || '', totalDays, new Date().toISOString()]
+  )
   res.status(201).json({ success: true, bookingId: id, message: 'Заявка успешно отправлена! Мы свяжемся с вами в ближайшее время.' })
 })
 
-// Admin: get all bookings with filters
-router.get('/', authMiddleware, (req: Request, res: Response) => {
+// Admin: get all bookings
+router.get('/', authMiddleware, async (req: Request, res: Response) => {
   const { status, roomId, search } = req.query
-  let sql = 'SELECT * FROM bookings WHERE 1=1'
-  const params: unknown[] = []
+  const conditions: string[] = []
+  const values: unknown[] = []
+  let i = 1
 
-  if (status)  { sql += ' AND status = ?';  params.push(status) }
-  if (roomId)  { sql += ' AND roomId = ?';  params.push(parseInt(roomId as string)) }
+  if (status)  { conditions.push(`status = $${i++}`); values.push(status) }
+  if (roomId)  { conditions.push(`"roomId" = $${i++}`); values.push(parseInt(roomId as string)) }
   if (search) {
-    const s = `%${search}%`
-    sql += ' AND (guestName LIKE ? OR phone LIKE ? OR email LIKE ?)'
-    params.push(s, s, s)
+    conditions.push(`("guestName" ILIKE $${i} OR phone ILIKE $${i} OR email ILIKE $${i})`)
+    values.push(`%${search}%`); i++
   }
-  sql += ' ORDER BY createdAt DESC'
 
-  res.json(db.prepare(sql).all(...params))
-})
-
-// Admin: get booking by id
-router.get('/calendar/data', authMiddleware, (_req: Request, res: Response) => {
-  const rows = db.prepare(`
-    SELECT id, roomId, roomName, checkIn, checkOut, guestName, status
-    FROM bookings WHERE status IN ('confirmed', 'pending')
-  `).all()
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+  const { rows } = await pool.query(`SELECT * FROM bookings ${where} ORDER BY "createdAt" DESC`, values)
   res.json(rows)
 })
 
-router.get('/:id', authMiddleware, (req: Request, res: Response) => {
-  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(req.params.id)
-  if (!booking) return res.status(404).json({ error: 'Бронирование не найдено' })
-  res.json(booking)
+// Admin: calendar data
+router.get('/calendar/data', authMiddleware, async (_req: Request, res: Response) => {
+  const { rows } = await pool.query(
+    `SELECT id, "roomId", "roomName", "checkIn", "checkOut", "guestName", status
+     FROM bookings WHERE status IN ('confirmed', 'pending')`
+  )
+  res.json(rows)
+})
+
+// Admin: get one booking
+router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
+  const { rows } = await pool.query('SELECT * FROM bookings WHERE id = $1', [req.params.id])
+  if (!rows[0]) return res.status(404).json({ error: 'Бронирование не найдено' })
+  res.json(rows[0])
 })
 
 // Admin: update status
-router.patch('/:id/status', authMiddleware, (req: Request, res: Response) => {
+router.patch('/:id/status', authMiddleware, async (req: Request, res: Response) => {
   const { status } = req.body
-  const allowed = ['pending', 'confirmed', 'cancelled', 'completed']
-  if (!allowed.includes(status)) return res.status(400).json({ error: 'Недопустимый статус' })
-
-  const result = db.prepare(
-    'UPDATE bookings SET status = ?, updatedAt = ? WHERE id = ?'
-  ).run(status, new Date().toISOString(), req.params.id)
-
-  if (result.changes === 0) return res.status(404).json({ error: 'Бронирование не найдено' })
-  res.json(db.prepare('SELECT * FROM bookings WHERE id = ?').get(req.params.id))
+  if (!['pending','confirmed','cancelled','completed'].includes(status)) {
+    return res.status(400).json({ error: 'Недопустимый статус' })
+  }
+  const { rowCount } = await pool.query(
+    `UPDATE bookings SET status = $1, "updatedAt" = $2 WHERE id = $3`,
+    [status, new Date().toISOString(), req.params.id]
+  )
+  if (!rowCount) return res.status(404).json({ error: 'Бронирование не найдено' })
+  const { rows } = await pool.query('SELECT * FROM bookings WHERE id = $1', [req.params.id])
+  res.json(rows[0])
 })
 
 // Admin: update booking
-router.put('/:id', authMiddleware, (req: Request, res: Response) => {
-  const existing = db.prepare('SELECT * FROM bookings WHERE id = ?').get(req.params.id)
-  if (!existing) return res.status(404).json({ error: 'Бронирование не найдено' })
-
+router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   const { guestName, phone, email, roomId, roomName, checkIn, checkOut, adults, children, comment, status } = req.body
-  db.prepare(`
-    UPDATE bookings SET guestName=?, phone=?, email=?, roomId=?, roomName=?, checkIn=?, checkOut=?,
-      adults=?, children=?, comment=?, status=?, updatedAt=? WHERE id=?
-  `).run(guestName, phone, email, roomId, roomName, checkIn, checkOut,
-         adults, children, comment, status, new Date().toISOString(), req.params.id)
-
-  res.json(db.prepare('SELECT * FROM bookings WHERE id = ?').get(req.params.id))
+  const { rowCount } = await pool.query(
+    `UPDATE bookings SET "guestName"=$1, phone=$2, email=$3, "roomId"=$4, "roomName"=$5,
+      "checkIn"=$6, "checkOut"=$7, adults=$8, children=$9, comment=$10, status=$11, "updatedAt"=$12
+     WHERE id = $13`,
+    [guestName, phone, email, roomId, roomName, checkIn, checkOut,
+     adults, children, comment, status, new Date().toISOString(), req.params.id]
+  )
+  if (!rowCount) return res.status(404).json({ error: 'Бронирование не найдено' })
+  const { rows } = await pool.query('SELECT * FROM bookings WHERE id = $1', [req.params.id])
+  res.json(rows[0])
 })
 
 // Admin: delete booking
-router.delete('/:id', authMiddleware, (req: Request, res: Response) => {
-  const result = db.prepare('DELETE FROM bookings WHERE id = ?').run(req.params.id)
-  if (result.changes === 0) return res.status(404).json({ error: 'Бронирование не найдено' })
+router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+  const { rowCount } = await pool.query('DELETE FROM bookings WHERE id = $1', [req.params.id])
+  if (!rowCount) return res.status(404).json({ error: 'Бронирование не найдено' })
   res.json({ success: true })
 })
 
