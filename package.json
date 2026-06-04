@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "concurrently -n \"API,VUE\" -c \"cyan,green\" \"npm run server\" \"vite\"",
-    "server": "nodemon --exec \"node --import tsx/esm server/index.ts\" --watch server --ext ts",
+    "server": "nodemon --exec \"node --env-file=.env --import tsx/esm server/index.ts\" --watch server --ext ts",
     "server:start": "node --import tsx/esm server/index.ts",
     "build": "vite build && tsc -p server/tsconfig.json",
     "start": "NODE_ENV=production node dist-server/index.js",

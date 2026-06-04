@@ -57,7 +57,7 @@ const roomIcons: Record<string, string> = {
           <span>/</span>
           <span>Номера</span>
         </div>
-        <h1 class="text-4xl md:text-5xl font-bold mb-3">Наши номера</h1>
+        <h1 class="text-4xl desk:text-5xl font-bold mb-3">Наши номера</h1>
         <p class="text-white/70 text-lg max-w-xl">18 номеров трёх категорий — выберите подходящий для вашего отдыха</p>
       </div>
     </div>
@@ -65,7 +65,7 @@ const roomIcons: Record<string, string> = {
     <main class="flex-1 py-14">
       <div class="page-container">
         <!-- Loading -->
-        <div v-if="loading" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div v-if="loading" class="grid grid-cols-1 desk:grid-cols-3 gap-6">
           <div v-for="i in 3" :key="i" class="card animate-pulse">
             <div class="h-52 bg-gray-200"></div>
             <div class="p-5 space-y-3">
@@ -83,13 +83,18 @@ const roomIcons: Record<string, string> = {
             :key="room.id"
             class="card group"
           >
-            <div class="flex flex-col md:flex-row">
+            <div class="flex flex-col desk:flex-row">
               <!-- Image -->
               <div
-                class="md:w-72 shrink-0 h-52 md:h-auto relative overflow-hidden bg-gradient-to-br"
+                class="desk:w-72 shrink-0 h-52 desk:h-auto relative overflow-hidden bg-gradient-to-br"
                 :class="roomColors[room.type]"
               >
-                <div class="absolute inset-0 flex items-center justify-center">
+                <img
+                  v-if="room.images?.[0]"
+                  :src="room.images[0]"
+                  class="absolute inset-0 w-full h-full object-cover"
+                />
+                <div v-else class="absolute inset-0 flex items-center justify-center">
                   <span class="text-7xl opacity-30">{{ roomIcons[room.type] }}</span>
                 </div>
                 <div class="absolute top-3 left-3">

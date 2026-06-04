@@ -17,7 +17,7 @@ import { RouterLink } from 'vue-router'
             <span>/</span>
             <span>Контакты</span>
           </div>
-          <h1 class="text-4xl md:text-5xl font-bold">Контакты</h1>
+          <h1 class="text-4xl desk:text-5xl font-bold">Контакты</h1>
           <p class="text-white/70 text-lg mt-2">Мы всегда на связи</p>
         </div>
       </div>

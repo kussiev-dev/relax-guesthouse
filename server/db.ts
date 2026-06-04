@@ -53,6 +53,11 @@ export async function initDb() {
       "passwordHash" TEXT NOT NULL,
       name           TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key   TEXT PRIMARY KEY,
+      value JSONB NOT NULL
+    );
   `)
 
   // Seed rooms if empty
@@ -77,6 +82,89 @@ export async function initDb() {
     }
   }
 
+  // Upsert site-wide settings (header/footer)
+  const siteDefaults = {
+    header: {
+      phone: '+79186723781',
+      phoneDisplay: '+7 (918) 672-37-81',
+    },
+    footer: {
+      description: 'Уютный гостевой дом в 5 минутах от моря. 18 номеров разных категорий для комфортного семейного отдыха.',
+      phones: [
+        { number: '+79186723781', display: '+7 (918) 672-37-81', label: '' },
+        { number: '+79186397266', display: '+7 (918) 639-72-66', label: 'Манана' },
+      ],
+      email: 'mananarelax@gmail.com',
+      address: 'Анапа, Джемете, Пионерский проспект 127/а',
+    },
+  }
+  await pool.query(
+    `INSERT INTO settings (key, value) VALUES ('site', $1)
+     ON CONFLICT (key) DO UPDATE SET value = $1::jsonb || settings.value`,
+    [JSON.stringify(siteDefaults)]
+  )
+  console.log('✓ Site settings synced')
+
+  // Upsert homepage content — merges defaults without overwriting existing fields
+  const homepageDefaults = {
+    hero: {
+      badge: 'Принимаем бронирования',
+      title: 'Гостевой дом',
+      titleHighlight: 'Релакс',
+      subtitle: 'Ваш уютный отдых в Джемете, Анапа',
+      description: '5 мин. до моря · Парковка · Wi-Fi · Мангал',
+      buttons: [
+        { label: 'Забронировать', style: 'filled', action: 'page', target: '/booking' },
+        { label: 'Смотреть номера', style: 'outline', action: 'page', target: '/rooms' },
+      ],
+    },
+    features: [
+      { icon: '🏖️', title: '5 минут до моря', desc: 'Пешеходная прогулка до пляжа' },
+      { icon: '❄️', title: 'Кондиционер', desc: 'В каждом номере' },
+      { icon: '📶', title: 'Быстрый Wi-Fi', desc: 'По всей территории' },
+      { icon: '🅿️', title: 'Парковка', desc: 'Бесплатная у дома' },
+      { icon: '🍖', title: 'Мангал / беседка', desc: 'Для вашего отдыха' },
+      { icon: '🛝', title: 'Детская площадка', desc: 'Для маленьких гостей' },
+      { icon: '💇', title: 'Салон красоты', desc: 'На территории' },
+      { icon: '🛒', title: 'Магазины рядом', desc: 'Магнит и Пятёрочка' },
+    ],
+    cta: {
+      title: 'Готовы к отдыху?',
+      description: 'Оставьте заявку — мы свяжемся с вами в течение часа и подтвердим бронирование',
+      buttons: [
+        { label: 'Забронировать онлайн', style: 'filled', action: 'page', target: '/booking' },
+        { label: 'Позвонить', style: 'outline', action: 'phone', target: '' },
+      ],
+    },
+    reviews: [
+      { name: 'Елена К.', date: 'Август 2024', text: 'Отличный гостевой дом! Всё чисто, уютно, хозяева очень приветливые. До моря рукой подать. Будем возвращаться!', rating: 5 },
+      { name: 'Алексей М.', date: 'Июль 2024', text: 'Провели с семьёй 2 недели. Дети в восторге от площадки. Мангал работает, wi-fi хороший. Рекомендую.', rating: 5 },
+      { name: 'Наталья В.', date: 'Июнь 2024', text: 'Брали люкс — огромный номер с кухней. Готовили сами, всё очень удобно. Манана — чудесный человек, помогла с советами по отдыху.', rating: 5 },
+    ],
+    location: {
+      title: 'Как нас найти',
+      description: 'Мы находимся в самом центре Джемете — всё рядом!',
+      items: [
+        { icon: '🏖️', text: 'До пляжа — 5–7 минут пешком' },
+        { icon: '🎡', text: 'Аквапарк — 10 минут' },
+        { icon: '🛒', text: 'Магнит и Пятёрочка — рядом' },
+        { icon: '🎪', text: 'Центр развлечений — 1 минута' },
+      ],
+      mapUrl: 'https://yandex.ru/maps/?text=Анапа+Джемете+Пионерский+проспект+127',
+    },
+    contacts: {
+      phone: '+79186723781',
+      address: 'г. Анапа, Джемете, Пионерский проспект, 127/а',
+    },
+  }
+  // $1::jsonb || value → defaults fill missing keys, existing values win
+  await pool.query(
+    `INSERT INTO settings (key, value) VALUES ('homepage', $1)
+     ON CONFLICT (key) DO UPDATE SET value = $1::jsonb || settings.value`,
+    [JSON.stringify(homepageDefaults)]
+  )
+  console.log('✓ Homepage settings synced')
+
   // Seed admin if empty
   const { rows: adminRows } = await pool.query('SELECT COUNT(*) as c FROM admin')
   if (parseInt(adminRows[0].c) === 0) {
@@ -93,6 +181,27 @@ export async function initDb() {
       [username, passwordHash, name]
     )
     console.log('✓ Seeded admin')
+  }
+
+  // Migrate old 'admin' username → 'manana' with new password (one-time)
+  const { rows: oldAdmin } = await pool.query("SELECT id FROM admin WHERE username = 'admin'")
+  if (oldAdmin.length > 0) {
+    const migratedHash = await bcrypt.hash('relax2026', 10)
+    await pool.query(
+      `UPDATE admin SET username = 'manana', "passwordHash" = $1, name = 'Манана' WHERE username = 'admin'`,
+      [migratedHash]
+    )
+    console.log('✓ Admin migrated to manana/relax2026')
+  }
+  // Ensure 'manana' account exists if no admin at all
+  const { rows: anyAdmin } = await pool.query('SELECT COUNT(*) as c FROM admin')
+  if (parseInt(anyAdmin[0].c) === 0) {
+    const hash = await bcrypt.hash('relax2026', 10)
+    await pool.query(
+      `INSERT INTO admin (username, "passwordHash", name) VALUES ('manana', $1, 'Манана')`,
+      [hash]
+    )
+    console.log('✓ Admin manana/relax2026 created')
   }
 }
 

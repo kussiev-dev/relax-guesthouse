@@ -27,7 +27,10 @@ const stats = computed(() => ({
   cancelled: bookings.value.filter(b => b.status === 'cancelled').length,
 }))
 
-const recent = computed(() => bookings.value.slice(0, 5))
+const visibleCount = ref(5)
+const recent = computed(() => bookings.value.slice(0, visibleCount.value))
+const remaining = computed(() => Math.min(5, bookings.value.length - visibleCount.value))
+const hasMore = computed(() => visibleCount.value < bookings.value.length)
 
 onMounted(async () => {
   try {
@@ -90,53 +93,15 @@ function formatDate(d: string) {
       </div>
     </div>
 
-    <!-- Quick actions -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-      <RouterLink to="/admin/bookings" class="card p-5 hover:border-[#C8973A] border border-transparent transition-all group">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
-            <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-          </div>
-          <div>
-            <div class="font-semibold text-gray-900 text-sm">Заявки</div>
-            <div class="text-xs text-gray-500">Управление заявками</div>
-          </div>
-        </div>
-      </RouterLink>
-      <RouterLink to="/admin/calendar" class="card p-5 hover:border-[#C8973A] border border-transparent transition-all group">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-[#C8973A]/10 rounded-xl flex items-center justify-center group-hover:bg-[#C8973A]/20 transition-colors">
-            <svg class="w-5 h-5 text-[#C8973A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-            </svg>
-          </div>
-          <div>
-            <div class="font-semibold text-gray-900 text-sm">Календарь</div>
-            <div class="text-xs text-gray-500">Занятость номеров</div>
-          </div>
-        </div>
-      </RouterLink>
-      <RouterLink to="/admin/rooms" class="card p-5 hover:border-[#C8973A] border border-transparent transition-all group">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-[#1B5E6B]/10 rounded-xl flex items-center justify-center group-hover:bg-[#1B5E6B]/20 transition-colors">
-            <svg class="w-5 h-5 text-[#1B5E6B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-            </svg>
-          </div>
-          <div>
-            <div class="font-semibold text-gray-900 text-sm">Номера</div>
-            <div class="text-xs text-gray-500">Управление номерами</div>
-          </div>
-        </div>
-      </RouterLink>
-    </div>
-
     <!-- Recent bookings -->
     <div class="card overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-        <h2 class="font-bold text-gray-900">Последние заявки</h2>
+        <div class="flex items-center gap-3">
+          <h2 class="font-bold text-gray-900">Последние заявки</h2>
+          <span v-if="!loading" class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+            {{ visibleCount }} из {{ bookings.length }}
+          </span>
+        </div>
         <RouterLink to="/admin/bookings" class="text-sm text-[#C8973A] hover:underline">Все заявки →</RouterLink>
       </div>
 
@@ -152,8 +117,8 @@ function formatDate(d: string) {
       </div>
 
       <div v-else class="divide-y divide-gray-50">
-        <div v-for="b in recent" :key="b.id" class="px-6 py-4 hover:bg-gray-50 transition-colors">
-          <div class="flex items-start justify-between gap-4">
+        <div v-for="b in recent" :key="b.id" class="px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors">
+          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2 mb-1">
                 <span class="font-semibold text-gray-900 text-sm">{{ b.guestName }}</span>
@@ -176,6 +141,22 @@ function formatDate(d: string) {
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Load more -->
+      <div v-if="!loading && hasMore" class="px-6 py-3 border-t border-gray-100 bg-gray-50">
+        <button
+          class="w-full text-sm text-gray-600 hover:text-[#C8973A] font-medium transition-colors flex items-center justify-center gap-2 py-1"
+          @click="visibleCount += 5"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+          Показать ещё {{ remaining }} из {{ bookings.length - visibleCount }} оставшихся
+        </button>
+      </div>
+      <div v-else-if="!loading && bookings.length > 5" class="px-6 py-3 border-t border-gray-100 text-center text-xs text-gray-400">
+        Показаны все {{ bookings.length }} заявок
       </div>
     </div>
   </div>

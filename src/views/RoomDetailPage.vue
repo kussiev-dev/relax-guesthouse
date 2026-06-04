@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
@@ -35,7 +35,41 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  window.addEventListener('keydown', onKey)
 })
+
+onUnmounted(() => window.removeEventListener('keydown', onKey))
+
+const activeImage = ref(0)
+const hasImages = computed(() => (room.value?.images?.length ?? 0) > 0)
+const lightboxOpen = ref(false)
+const lightboxIndex = ref(0)
+
+function openLightbox(idx: number) {
+  lightboxIndex.value = idx
+  lightboxOpen.value = true
+}
+
+function closeLightbox() {
+  lightboxOpen.value = false
+}
+
+function lightboxPrev() {
+  const len = room.value?.images?.length ?? 0
+  lightboxIndex.value = (lightboxIndex.value - 1 + len) % len
+}
+
+function lightboxNext() {
+  const len = room.value?.images?.length ?? 0
+  lightboxIndex.value = (lightboxIndex.value + 1) % len
+}
+
+function onKey(e: KeyboardEvent) {
+  if (!lightboxOpen.value) return
+  if (e.key === 'Escape') closeLightbox()
+  if (e.key === 'ArrowLeft') lightboxPrev()
+  if (e.key === 'ArrowRight') lightboxNext()
+}
 
 const roomColors: Record<string, string> = {
   econom: 'from-amber-50 to-orange-100',
@@ -57,14 +91,37 @@ const roomColors: Record<string, string> = {
 
       <template v-else-if="room">
         <!-- Hero Image -->
-        <div class="h-72 md:h-96 relative overflow-hidden bg-gradient-to-br" :class="roomColors[room.type]">
-          <div class="absolute inset-0 flex items-center justify-center">
+        <div
+          class="h-72 desk:h-[28rem] relative overflow-hidden bg-gradient-to-br"
+          :class="[roomColors[room.type], hasImages ? 'cursor-zoom-in' : '']"
+          @click="hasImages && openLightbox(activeImage)"
+        >
+          <img
+            v-if="hasImages"
+            :src="room!.images[activeImage]"
+            class="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
+          />
+          <div v-else class="absolute inset-0 flex items-center justify-center">
             <svg class="w-48 h-48 opacity-10" fill="currentColor" viewBox="0 0 24 24">
               <path d="M7 13c1.66 0 3-1.34 3-3S8.66 7 7 7s-3 1.34-3 3 1.34 3 3 3zm12-6h-8v7H3V5H1v15h2v-3h18v3h2v-9c0-2.21-1.79-4-4-4z"/>
             </svg>
           </div>
-          <div class="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
-          <div class="absolute bottom-6 left-0 right-0 page-container">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none"></div>
+
+          <div class="absolute bottom-0 left-0 right-0 page-container pb-6" @click.stop>
+            <!-- Thumbnails strip -->
+            <div v-if="(room!.images?.length ?? 0) > 1" class="flex gap-2 overflow-x-auto mb-4 scrollbar-none">
+              <button
+                v-for="(img, idx) in room!.images"
+                :key="idx"
+                class="shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-all"
+                :class="activeImage === idx ? 'border-white opacity-100' : 'border-white/30 opacity-60 hover:opacity-90'"
+                @click="activeImage = idx"
+              >
+                <img :src="img" class="w-full h-full object-cover">
+              </button>
+            </div>
+
             <div class="flex items-center gap-2 text-white/70 text-sm mb-2">
               <RouterLink to="/" class="hover:text-white">Главная</RouterLink>
               <span>/</span>
@@ -73,7 +130,7 @@ const roomColors: Record<string, string> = {
               <span>{{ room.name }}</span>
             </div>
             <div class="flex items-end justify-between">
-              <h1 class="text-3xl md:text-4xl font-bold text-white">{{ room.name }}</h1>
+              <h1 class="text-3xl desk:text-4xl font-bold text-white">{{ room.name }}</h1>
               <span :class="room.available ? 'badge-available' : 'badge-booked'">
                 {{ room.available ? '✓ Доступен' : 'Занят' }}
               </span>
@@ -133,7 +190,7 @@ const roomColors: Record<string, string> = {
 
             <!-- Sidebar / Booking CTA -->
             <div class="space-y-5">
-              <div class="card p-6 sticky top-24">
+              <div class="card p-6 desk:sticky desk:top-24">
                 <div class="text-center mb-5 pb-5 border-b border-gray-100">
                   <div class="text-sm text-gray-500 mb-1">Стоимость</div>
                   <div class="text-3xl font-bold text-[#C8973A]">{{ room.priceMin.toLocaleString('ru') }}₽</div>
@@ -203,5 +260,73 @@ const roomColors: Record<string, string> = {
     </div>
 
     <AppFooter />
+
+    <!-- Lightbox -->
+    <Teleport to="body">
+      <Transition name="lightbox">
+        <div
+          v-if="lightboxOpen"
+          class="fixed inset-0 z-[100] bg-black/95 flex flex-col"
+          @click.self="closeLightbox"
+        >
+          <!-- Top bar -->
+          <div class="flex items-center justify-between px-6 py-4 shrink-0">
+            <span class="text-white/60 text-sm">{{ lightboxIndex + 1 }} / {{ room?.images?.length }}</span>
+            <button class="text-white/70 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors" @click="closeLightbox">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Main image -->
+          <div class="flex-1 flex items-center justify-center relative px-16 min-h-0">
+            <button
+              v-if="(room?.images?.length ?? 0) > 1"
+              class="absolute left-4 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors"
+              @click="lightboxPrev"
+            >
+              <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+
+            <img
+              :src="room!.images[lightboxIndex]"
+              class="max-h-full max-w-full object-contain select-none"
+              @click.stop
+            />
+
+            <button
+              v-if="(room?.images?.length ?? 0) > 1"
+              class="absolute right-4 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors"
+              @click="lightboxNext"
+            >
+              <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Thumbnails -->
+          <div v-if="(room?.images?.length ?? 0) > 1" class="shrink-0 flex gap-2 overflow-x-auto px-6 py-4 justify-center">
+            <button
+              v-for="(img, idx) in room!.images"
+              :key="idx"
+              class="shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all"
+              :class="lightboxIndex === idx ? 'border-white opacity-100' : 'border-white/20 opacity-40 hover:opacity-70'"
+              @click="lightboxIndex = idx"
+            >
+              <img :src="img" class="w-full h-full object-cover">
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.lightbox-enter-active, .lightbox-leave-active { transition: opacity 0.2s ease; }
+.lightbox-enter-from, .lightbox-leave-to { opacity: 0; }
+</style>

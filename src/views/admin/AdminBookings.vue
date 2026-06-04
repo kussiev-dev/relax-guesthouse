@@ -124,7 +124,36 @@ const statusOptions = [
         Заявок не найдено
       </div>
 
-      <div v-else class="overflow-x-auto">
+      <div v-else>
+        <!-- Карточки на мобиле -->
+        <div class="sm:hidden divide-y divide-gray-100">
+          <div
+            v-for="b in filtered" :key="b.id"
+            class="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+            @click="openModal(b)"
+          >
+            <div class="flex items-start justify-between gap-2 mb-2">
+              <div>
+                <div class="font-medium text-gray-900 text-sm">{{ b.guestName }}</div>
+                <a :href="`tel:${b.phone}`" class="text-xs text-[#C8973A]" @click.stop>{{ b.phone }}</a>
+              </div>
+              <span :class="statusMap[b.status].cls">{{ statusMap[b.status].label }}</span>
+            </div>
+            <div class="text-xs text-gray-500 mb-2">
+              {{ b.roomName }} · {{ new Date(b.checkIn).toLocaleDateString('ru-RU', {day:'numeric',month:'short'}) }} – {{ new Date(b.checkOut).toLocaleDateString('ru-RU', {day:'numeric',month:'short'}) }} · {{ b.totalDays }} н.
+            </div>
+            <div class="flex gap-2" @click.stop>
+              <button v-if="b.status === 'pending'" class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-lg font-medium" @click="updateStatus(b.id, 'confirmed')">✓ Подтвердить</button>
+              <button v-if="b.status === 'pending'" class="text-xs bg-red-50 text-red-600 px-2.5 py-1 rounded-lg font-medium" @click="updateStatus(b.id, 'cancelled')">✕ Отменить</button>
+              <button class="ml-auto text-gray-400 hover:text-red-500 p-1 rounded-lg hover:bg-red-50" @click="deleteBooking(b.id)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Таблица на десктопе -->
+        <div class="hidden sm:block overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-gray-50 border-b border-gray-100">
             <tr>
@@ -137,40 +166,23 @@ const statusOptions = [
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            <tr
-              v-for="b in filtered"
-              :key="b.id"
-              class="hover:bg-gray-50 cursor-pointer transition-colors"
-              @click="openModal(b)"
-            >
+            <tr v-for="b in filtered" :key="b.id" class="hover:bg-gray-50 cursor-pointer transition-colors" @click="openModal(b)">
               <td class="px-6 py-4">
                 <div class="font-medium text-gray-900">{{ b.guestName }}</div>
                 <a :href="`tel:${b.phone}`" class="text-xs text-[#C8973A]" @click.stop>{{ b.phone }}</a>
               </td>
-              <td class="px-4 py-4">
-                <span class="text-gray-700">{{ b.roomName }}</span>
-              </td>
+              <td class="px-4 py-4"><span class="text-gray-700">{{ b.roomName }}</span></td>
               <td class="px-4 py-4">
                 <div class="text-gray-700">{{ new Date(b.checkIn).toLocaleDateString('ru-RU', { day:'numeric', month:'short' }) }}</div>
                 <div class="text-gray-400 text-xs">{{ new Date(b.checkOut).toLocaleDateString('ru-RU', { day:'numeric', month:'short' }) }} · {{ b.totalDays }} н.</div>
               </td>
-              <td class="px-4 py-4">
-                <span :class="statusMap[b.status].cls">{{ statusMap[b.status].label }}</span>
-              </td>
-              <td class="px-4 py-4 text-xs text-gray-400">
-                {{ new Date(b.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) }}
-              </td>
+              <td class="px-4 py-4"><span :class="statusMap[b.status].cls">{{ statusMap[b.status].label }}</span></td>
+              <td class="px-4 py-4 text-xs text-gray-400">{{ new Date(b.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) }}</td>
               <td class="px-4 py-4" @click.stop>
                 <div class="flex items-center gap-1">
-                  <button v-if="b.status === 'pending'"
-                    class="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 px-2.5 py-1 rounded-lg font-medium"
-                    @click="updateStatus(b.id, 'confirmed')">✓</button>
-                  <button v-if="b.status === 'pending'"
-                    class="text-xs bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 rounded-lg font-medium"
-                    @click="updateStatus(b.id, 'cancelled')">✕</button>
-                  <button
-                    class="text-xs text-gray-400 hover:text-red-500 px-2 py-1 rounded-lg hover:bg-red-50"
-                    @click="deleteBooking(b.id)">
+                  <button v-if="b.status === 'pending'" class="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 px-2.5 py-1 rounded-lg font-medium" @click="updateStatus(b.id, 'confirmed')">✓</button>
+                  <button v-if="b.status === 'pending'" class="text-xs bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 rounded-lg font-medium" @click="updateStatus(b.id, 'cancelled')">✕</button>
+                  <button class="text-xs text-gray-400 hover:text-red-500 px-2 py-1 rounded-lg hover:bg-red-50" @click="deleteBooking(b.id)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                   </button>
                 </div>
@@ -178,25 +190,26 @@ const statusOptions = [
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
     </div>
 
     <!-- Modal -->
     <Transition name="modal">
-      <div v-if="showModal && selectedBooking" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="showModal = false">
-        <div class="absolute inset-0 bg-black/50" @click="showModal = false"></div>
+      <div v-if="showModal && selectedBooking" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50"></div>
         <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
           <!-- Modal header -->
           <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-[#1B5E6B] to-[#134A56] text-white">
             <h3 class="font-bold">Заявка #{{ selectedBooking.id }}</h3>
-            <button @click="showModal = false" class="text-white/70 hover:text-white">
+            <button @click="showModal = false" class="text-white/70 hover:text-white cursor-pointer">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
 
           <!-- Modal body -->
-          <div class="p-6 space-y-4">
-            <div class="grid grid-cols-2 gap-4">
+          <div class="p-4 sm:p-6 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <div class="text-xs text-gray-500 mb-0.5">Имя гостя</div>
                 <div class="font-semibold text-gray-900">{{ selectedBooking.guestName }}</div>

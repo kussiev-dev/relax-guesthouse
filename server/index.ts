@@ -6,6 +6,7 @@ import { initDb } from './db.js'
 import authRoutes from './routes/auth.js'
 import roomsRoutes from './routes/rooms.js'
 import bookingsRoutes from './routes/bookings.js'
+import settingsRoutes from './routes/settings.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -22,6 +23,7 @@ app.use('/uploads', express.static(resolve('./uploads')))
 app.use('/api/auth', authRoutes)
 app.use('/api/rooms', roomsRoutes)
 app.use('/api/bookings', bookingsRoutes)
+app.use('/api/settings', settingsRoutes)
 app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }))
 
 if (IS_PROD) {

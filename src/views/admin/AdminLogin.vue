@@ -78,9 +78,6 @@ async function login() {
           </button>
         </form>
 
-        <div class="mt-4 p-3 bg-gray-50 rounded-xl text-xs text-gray-500">
-          <p><strong>Логин:</strong> admin &nbsp; <strong>Пароль:</strong> admin123</p>
-        </div>
       </div>
 
       <div class="text-center mt-6">

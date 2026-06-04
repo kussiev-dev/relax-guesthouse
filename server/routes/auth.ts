@@ -32,4 +32,31 @@ router.get('/me', (req: Request, res: Response) => {
   }
 })
 
+router.post('/change-password', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization
+  if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'Не авторизован' })
+
+  let username: string
+  try {
+    const payload = jwt.verify(authHeader.slice(7), JWT_SECRET) as { username: string }
+    username = payload.username
+  } catch {
+    return res.status(401).json({ error: 'Недействительный токен' })
+  }
+
+  const { currentPassword, newPassword } = req.body
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Заполните все поля' })
+  if (newPassword.length < 6) return res.status(400).json({ error: 'Пароль должен быть не менее 6 символов' })
+
+  const { rows } = await pool.query('SELECT * FROM admin WHERE username = $1', [username])
+  if (!rows[0]) return res.status(404).json({ error: 'Пользователь не найден' })
+
+  const valid = await bcrypt.compare(currentPassword, rows[0].passwordHash)
+  if (!valid) return res.status(400).json({ error: 'Текущий пароль неверен' })
+
+  const hash = await bcrypt.hash(newPassword, 10)
+  await pool.query('UPDATE admin SET "passwordHash" = $1 WHERE username = $2', [hash, username])
+  res.json({ success: true })
+})
+
 export default router

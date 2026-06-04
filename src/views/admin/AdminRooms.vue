@@ -7,11 +7,13 @@ interface Room {
   name: string
   type: string
   description: string
+  shortDescription: string
   priceMin: number
   priceMax: number
   area: number
   capacity: number
   amenities: string[]
+  images: string[]
   available: boolean
   totalRooms: number
 }
@@ -22,6 +24,8 @@ const saving = ref<number | null>(null)
 const editingRoom = ref<Room | null>(null)
 const editForm = ref<Partial<Room>>({})
 const newAmenity = ref('')
+const uploadingImages = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 onMounted(async () => {
   try {
@@ -44,7 +48,7 @@ async function toggleAvailability(room: Room) {
 
 function startEdit(room: Room) {
   editingRoom.value = room
-  editForm.value = { ...room, amenities: [...room.amenities] }
+  editForm.value = { ...room, amenities: [...room.amenities], images: [...(room.images || [])] }
 }
 
 function cancelEdit() {
@@ -65,11 +69,40 @@ function removeAmenity(idx: number) {
   editForm.value.amenities?.splice(idx, 1)
 }
 
+async function uploadImages(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files?.length || !editingRoom.value) return
+
+  uploadingImages.value = true
+  try {
+    const formData = new FormData()
+    for (const file of input.files) {
+      formData.append('images', file)
+    }
+    const { data } = await api.post(`/rooms/${editingRoom.value.id}/images`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    editForm.value.images = data.images
+    const idx = rooms.value.findIndex(r => r.id === editingRoom.value!.id)
+    if (idx !== -1) rooms.value[idx].images = data.images
+  } finally {
+    uploadingImages.value = false
+    input.value = ''
+  }
+}
+
+async function removeImage(url: string) {
+  if (!editingRoom.value) return
+  const { data } = await api.delete(`/rooms/${editingRoom.value.id}/images`, { data: { url } })
+  editForm.value.images = data.images
+  const idx = rooms.value.findIndex(r => r.id === editingRoom.value!.id)
+  if (idx !== -1) rooms.value[idx].images = data.images
+}
+
 async function saveRoom() {
   if (!editingRoom.value) return
   saving.value = editingRoom.value.id
   try {
-    // Автоматически обновляем priceLabel из priceMin
     const payload = {
       ...editForm.value,
       priceLabel: `от ${(editForm.value.priceMin ?? 0).toLocaleString('ru')} ₽/ночь`,
@@ -110,7 +143,12 @@ const roomIcons: Record<string, string> = { econom: '🛏️', standard: '🏠',
       <div v-for="room in rooms" :key="room.id" class="card overflow-hidden">
         <!-- Room image/header -->
         <div class="h-28 bg-gradient-to-br relative" :class="roomColors[room.type]">
-          <div class="absolute inset-0 flex items-center justify-center">
+          <img
+            v-if="room.images?.[0]"
+            :src="room.images[0]"
+            class="absolute inset-0 w-full h-full object-cover"
+          />
+          <div v-else class="absolute inset-0 flex items-center justify-center">
             <span class="text-5xl opacity-30">{{ roomIcons[room.type] }}</span>
           </div>
           <div class="absolute top-3 left-3">
@@ -119,7 +157,7 @@ const roomIcons: Record<string, string> = { econom: '🛏️', standard: '🏠',
           <!-- Toggle availability -->
           <div class="absolute top-3 right-3">
             <button
-              class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none"
+              class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none cursor-pointer"
               :class="room.available ? 'bg-green-500' : 'bg-gray-300'"
               :disabled="saving === room.id"
               @click="toggleAvailability(room)"
@@ -155,6 +193,10 @@ const roomIcons: Record<string, string> = { econom: '🛏️', standard: '🏠',
               <span class="text-gray-500">Вместимость</span>
               <span class="font-medium">до {{ room.capacity }} чел.</span>
             </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500">Фото</span>
+              <span class="font-medium">{{ (room.images || []).length }} шт.</span>
+            </div>
           </div>
 
           <div class="flex flex-wrap gap-1.5 mb-4">
@@ -172,18 +214,24 @@ const roomIcons: Record<string, string> = { econom: '🛏️', standard: '🏠',
 
     <!-- Edit Modal -->
     <Transition name="modal">
-      <div v-if="editingRoom" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="cancelEdit">
-        <div class="absolute inset-0 bg-black/50" @click="cancelEdit"></div>
+      <div v-if="editingRoom" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50"></div>
         <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
           <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
             <h3 class="font-bold text-gray-900">Редактировать: {{ editingRoom.name }}</h3>
-            <button @click="cancelEdit" class="text-gray-400 hover:text-gray-600">
+            <button @click="cancelEdit" class="text-gray-400 hover:text-gray-600 cursor-pointer">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
 
-          <form class="p-6 space-y-4" @submit.prevent="saveRoom">
-            <div class="grid grid-cols-2 gap-4">
+          <form class="p-4 sm:p-6 space-y-4" @submit.prevent="saveRoom">
+            <!-- Name -->
+            <div>
+              <label class="label">Название номера</label>
+              <input v-model="editForm.name" type="text" class="input-field" placeholder="Эконом, Стандарт, Люкс...">
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label class="label">Мин. цена (₽)</label>
                 <input v-model.number="editForm.priceMin" type="number" class="input-field" min="0">
@@ -236,6 +284,50 @@ const roomIcons: Record<string, string> = { econom: '🛏️', standard: '🏠',
                 <input v-model="newAmenity" type="text" class="input-field flex-1 text-sm py-2" placeholder="Добавить удобство..." @keydown.enter.prevent="addAmenity">
                 <button type="button" class="btn-outline py-2 px-3 text-sm" @click="addAmenity">+</button>
               </div>
+            </div>
+
+            <!-- Photos -->
+            <div>
+              <label class="label">Фотографии</label>
+              <div v-if="editForm.images?.length" class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                <div
+                  v-for="img in editForm.images"
+                  :key="img"
+                  class="relative group aspect-square rounded-lg overflow-hidden bg-gray-100"
+                >
+                  <img :src="img" class="w-full h-full object-cover">
+                  <button
+                    type="button"
+                    class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xl"
+                    @click="removeImage(img)"
+                    title="Удалить фото"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <div v-else class="text-sm text-gray-400 mb-3">Фотографий пока нет</div>
+
+              <input
+                ref="fileInputRef"
+                type="file"
+                accept="image/*"
+                multiple
+                class="hidden"
+                @change="uploadImages"
+              >
+              <button
+                type="button"
+                class="btn-outline py-2 px-4 text-sm w-full justify-center"
+                :disabled="uploadingImages"
+                @click="fileInputRef?.click()"
+              >
+                <svg v-if="uploadingImages" class="w-4 h-4 animate-spin mr-1" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                {{ uploadingImages ? 'Загружаем...' : '+ Добавить фото' }}
+              </button>
             </div>
 
             <div class="flex gap-3 pt-2">
